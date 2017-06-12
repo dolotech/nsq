@@ -40,6 +40,7 @@ func (p *protocolV2) IOLoop(conn net.Conn) error {
 	var zeroTime time.Time
 
 	clientID := atomic.AddInt64(&p.ctx.nsqd.clientIDSequence, 1)
+	// 创建一个新的Client对象(处理数据的工作交给了clientV2)
 	client := newClientV2(clientID, conn, p.ctx)
 
 	// synchronize the startup of messagePump in order
@@ -47,11 +48,15 @@ func (p *protocolV2) IOLoop(conn net.Conn) error {
 	// goroutine local state derived from client attributes
 	// and avoid a potential race with IDENTIFY (where a client
 	// could have changed or disabled said attributes)
+	// 开启另一个goroutine，定时发送心跳信息，客户端收到心跳信息后要回复。
+	// 如果nsqd长时间未收到该连接的心跳回复说明连接已出问题，会断开连接，这就是nsq的心跳实现机制
 	messagePumpStartedChan := make(chan bool)
 	go p.messagePump(client, messagePumpStartedChan)
 	<-messagePumpStartedChan
 
 	for {
+		// 如果超过client.HeartbeatInterval * 2时间间隔内未收到客户端发送的命令，说明连接处问题了，需要关闭此链接
+		// 正常情况下每隔HeartbeatInterval时间客户端都会发送一个心跳回复。
 		if client.HeartbeatInterval > 0 {
 			client.SetReadDeadline(time.Now().Add(client.HeartbeatInterval * 2))
 		} else {
@@ -60,6 +65,7 @@ func (p *protocolV2) IOLoop(conn net.Conn) error {
 
 		// ReadSlice does not allocate new space for the data each request
 		// ie. the returned slice is only valid until the next call to it
+		// nsq规定所有的命令以 "\n" 结尾，命令与参数之间以空格分隔
 		line, err = client.Reader.ReadSlice('\n')
 		if err != nil {
 			if err == io.EOF {
@@ -76,13 +82,16 @@ func (p *protocolV2) IOLoop(conn net.Conn) error {
 		if len(line) > 0 && line[len(line)-1] == '\r' {
 			line = line[:len(line)-1]
 		}
+		// 字符串按一个separatorBytes分割，并获取相应的Commad 以及该command 的相应的params
 		params := bytes.Split(line, separatorBytes)
 
 		p.ctx.nsqd.logf(LOG_DEBUG, "PROTOCOL(V2): [%s] %s", client, params)
 
+		// 处理客户端发送过来的命令
 		var response []byte
 		response, err = p.Exec(client, params)
 		if err != nil {
+			// 处理命令发生错误
 			ctx := ""
 			if parentErr := err.(protocol.ChildErr).Parent(); parentErr != nil {
 				ctx = " - " + parentErr.Error()
@@ -101,7 +110,7 @@ func (p *protocolV2) IOLoop(conn net.Conn) error {
 			}
 			continue
 		}
-
+		// 将命令的处理结果发送给客户端
 		if response != nil {
 			err = p.Send(client, frameTypeResponse, response)
 			if err != nil {
@@ -114,6 +123,7 @@ func (p *protocolV2) IOLoop(conn net.Conn) error {
 	p.ctx.nsqd.logf(LOG_INFO, "PROTOCOL(V2): [%s] exiting ioloop", client)
 	conn.Close()
 	close(client.ExitChan)
+	// client.Channel记录的是该客户端订阅的Channel,客户端关闭的时候需要从Channel中移除这个订阅者。
 	if client.Channel != nil {
 		client.Channel.RemoveClient(client.ID)
 	}
@@ -199,6 +209,7 @@ func (p *protocolV2) Exec(client *clientV2, params [][]byte) ([]byte, error) {
 	return nil, protocol.NewFatalClientErr(nil, "E_INVALID", fmt.Sprintf("invalid command %s", params[0]))
 }
 
+// 消息泵,每个客户端连接对象都会启动
 func (p *protocolV2) messagePump(client *clientV2, startedChan chan bool) {
 	var err error
 	var buf bytes.Buffer
@@ -214,6 +225,7 @@ func (p *protocolV2) messagePump(client *clientV2, startedChan chan bool) {
 	subEventChan := client.SubEventChan
 	identifyEventChan := client.IdentifyEventChan
 	outputBufferTicker := time.NewTicker(client.OutputBufferTimeout)
+	// 产生tick的channel，通过它定时发送心跳包
 	heartbeatTicker := time.NewTicker(client.HeartbeatInterval)
 	heartbeatChan := heartbeatTicker.C
 	msgTimeout := client.MsgTimeout
@@ -228,9 +240,10 @@ func (p *protocolV2) messagePump(client *clientV2, startedChan chan bool) {
 
 	// signal to the goroutine that started the messagePump
 	// that we've started up
-	close(startedChan)
+	close(startedChan) // 通知外面我们运行了
 
 	for {
+		// IsReadyForMessages就是检查Client的RDY命令所设置的ReadyCount，判断是否可以继续向Client发送消息
 		if subChannel == nil || !client.IsReadyForMessages() {
 			// the client is not ready to receive messages...
 			memoryMsgChan = nil
@@ -247,6 +260,7 @@ func (p *protocolV2) messagePump(client *clientV2, startedChan chan bool) {
 		} else if flushed {
 			// last iteration we flushed...
 			// do not select on the flusher ticker channel
+			//客户端做好准备，则试图从订阅的Channel的clientMsgChan中读取消息
 			memoryMsgChan = subChannel.memoryMsgChan
 			backendMsgChan = subChannel.backend.ReadChan()
 			flusherChan = nil
@@ -257,7 +271,7 @@ func (p *protocolV2) messagePump(client *clientV2, startedChan chan bool) {
 			backendMsgChan = subChannel.backend.ReadChan()
 			flusherChan = outputBufferTicker.C
 		}
-
+		// 接收到客户端发送的RDY命令后，则会向ReadyStateChan中写入消息，下面的case条件则可满足，重新进入for循环
 		select {
 		case <-flusherChan:
 			// if this case wins, we're either starved
@@ -271,11 +285,14 @@ func (p *protocolV2) messagePump(client *clientV2, startedChan chan bool) {
 			}
 			flushed = true
 		case <-client.ReadyStateChan:
+
 		case subChannel = <-subEventChan:
+			// 接收到客户端发送的SUB命令后，会向subEventChan中写入消息，
 			// you can't SUB anymore
 			subEventChan = nil
 		case identifyData := <-identifyEventChan:
 			// you can't IDENTIFY anymore
+			// 只能认证一次
 			identifyEventChan = nil
 
 			outputBufferTicker.Stop()
@@ -296,6 +313,7 @@ func (p *protocolV2) messagePump(client *clientV2, startedChan chan bool) {
 
 			msgTimeout = identifyData.MsgTimeout
 		case <-heartbeatChan:
+			// 发送心跳消息
 			err = p.Send(client, frameTypeResponse, heartbeatBytes)
 			if err != nil {
 				goto exit
@@ -320,14 +338,19 @@ func (p *protocolV2) messagePump(client *clientV2, startedChan chan bool) {
 			}
 			flushed = false
 		case msg := <-memoryMsgChan:
+			// 因为每个客户端都启动了goroutine,然后select其关联的Channel
+			// 会有N个消费者共同监听channel.clientMsgChan,一条消息只能被一个消费者抢到
 			if sampleRate > 0 && rand.Int31n(100) > sampleRate {
 				continue
 			}
 			msg.Attempts++
+			// 以消息的发送时间排序，将消息放在一个最小时间堆上，如果在规定时间内收到对该消息的确认回复(FIN messageId),
+			// 说明消息以被消费者成功处理，会将该消息从堆中删除
 
-			subChannel.StartInFlightTimeout(msg, client.ID, msgTimeout)
-			client.SendingMessage()
-			err = p.SendMessage(client, msg, &buf)
+			// 如果超过一定时间没有接受 FIN messageId，会从堆中取出该消息重新发送，所以nsq能确保一个消息至少被一个i消费处理。
+			subChannel.StartInFlightTimeout(msg, client.ID, msgTimeout) // 添加到队列
+			client.SendingMessage()                                     // 消息统计
+			err = p.SendMessage(client, msg, &buf)                      // 发送到网络
 			if err != nil {
 				goto exit
 			}

@@ -16,10 +16,10 @@ const (
 type MessageID [MsgIDLength]byte
 
 type Message struct {
-	ID        MessageID
-	Body      []byte
-	Timestamp int64
-	Attempts  uint16
+	ID        MessageID // 16字节的MessageID
+	Body      []byte    // 消息内容
+	Timestamp int64     // time.Now().UnixNano() 创建的纳秒时间戳
+	Attempts  uint16    // (uint16)  2-byte attempts
 
 	// for in-flight handling
 	deliveryTS time.Time
