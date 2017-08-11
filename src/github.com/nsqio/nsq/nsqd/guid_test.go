@@ -26,6 +26,7 @@ func BenchmarkGUID(b *testing.B) {
 	var okays, errors, fails int64
 	var previd guid
 	factory := &guidFactory{}
+	b.Log(b.N)
 	for i := 0; i < b.N; i++ {
 		id, err := factory.NewGUID()
 		if err != nil {

@@ -130,7 +130,7 @@ func (p *protocolV2) IOLoop(conn net.Conn) error {
 
 	return err
 }
-
+// 将msg发送给客户端，buf为了减少不必要的bytes.Buffer分配
 func (p *protocolV2) SendMessage(client *clientV2, msg *Message, buf *bytes.Buffer) error {
 	p.ctx.nsqd.logf(LOG_DEBUG, "PROTOCOL(V2): writing msg(%s) to client(%s) - %s",
 		msg.ID, client, msg.Body)
@@ -151,7 +151,7 @@ func (p *protocolV2) SendMessage(client *clientV2, msg *Message, buf *bytes.Buff
 
 func (p *protocolV2) Send(client *clientV2, frameType int32, data []byte) error {
 	client.writeLock.Lock()
-
+	// 设置写超时
 	var zeroTime time.Time
 	if client.HeartbeatInterval > 0 {
 		client.SetWriteDeadline(time.Now().Add(client.HeartbeatInterval))
@@ -164,7 +164,7 @@ func (p *protocolV2) Send(client *clientV2, frameType int32, data []byte) error 
 		client.writeLock.Unlock()
 		return err
 	}
-
+	// 如果不是Mesaage就刷新一边。保证数据全部发送出去
 	if frameType != frameTypeMessage {
 		err = client.Flush()
 	}

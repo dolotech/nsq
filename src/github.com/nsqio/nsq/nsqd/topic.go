@@ -197,7 +197,7 @@ func (t *Topic) PutMessages(msgs []*Message) error {
 	atomic.AddUint64(&t.messageCount, uint64(len(msgs)))
 	return nil
 }
-
+// 将消息写到topic的channel中，如果topic的memoryMsgChan已满则将topic写到磁盘文件中
 func (t *Topic) put(m *Message) error {
 	select {
 	case t.memoryMsgChan <- m:
@@ -215,13 +215,14 @@ func (t *Topic) put(m *Message) error {
 	}
 	return nil
 }
-
+// 深度： 内存中的消息个数 + （BackendQueue）队列中的数据
 func (t *Topic) Depth() int64 {
 	return int64(len(t.memoryMsgChan)) + t.backend.Depth()
 }
 
 // messagePump selects over the in-memory and backend queue and
 // writes messages to every channel for this topic
+// topic的主业务处理函数
 func (t *Topic) messagePump() {
 	var msg *Message
 	var buf []byte
