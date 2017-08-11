@@ -4,6 +4,7 @@ import (
 	"math/rand"
 )
 
+// 产生一组不重复的随机数
 func UniqRands(l int, n int) []int {
 	set := make(map[int]struct{})
 	nums := make([]int, 0, l)

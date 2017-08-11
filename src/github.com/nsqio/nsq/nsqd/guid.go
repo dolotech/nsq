@@ -8,7 +8,7 @@ package nsqd
 // only minor cleanup and changes to introduce a type, combine the concept
 // of workerID + datacenterId into a single identifier, and modify the
 // behavior when sequences rollover for our specific implementation needs
-
+// 生成唯一的ID
 import (
 	"encoding/hex"
 	"errors"

@@ -182,6 +182,7 @@ type program struct {
 }
 
 func main() {
+
 	prg := &program{}
 	if err := svc.Run(prg, syscall.SIGINT, syscall.SIGTERM); err != nil {
 		log.Fatal(err)

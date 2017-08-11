@@ -40,21 +40,22 @@ type errStore struct {
 
 type NSQD struct {
 	// 64bit atomic vars need to be first for proper alignment on 32bit platforms
+	// 64位的原子变量，确保32位系统上可以有64位长度
 	clientIDSequence int64
 
 	sync.RWMutex
 
 	opts atomic.Value
 
-	dl        *dirlock.DirLock
-	isLoading int32
-	errValue  atomic.Value
-	startTime time.Time
-
+	dl        *dirlock.DirLock // 文件锁
+	isLoading int32  // 1:表明数据在载入过程中
+	errValue  atomic.Value// 表示健康状况的错误值
+	startTime time.Time // 启动时间
+	// 一个nsqd实例可以有多个Topic,使用sync.RWMutex加锁
 	topicMap map[string]*Topic
 
 	lookupPeers atomic.Value
-
+	// 服务监听对象
 	tcpListener   net.Listener
 	httpListener  net.Listener
 	httpsListener net.Listener
@@ -64,13 +65,16 @@ type NSQD struct {
 
 	notifyChan           chan interface{}
 	optsNotificationChan chan struct{}
+	// 通知整体退出
 	exitChan             chan int
+	// 等待goroutine退出
 	waitGroup            util.WaitGroupWrapper
 
 	ci *clusterinfo.ClusterInfo
 }
 
 func New(opts *Options) *NSQD {
+	// 存储数据的目录
 	dataPath := opts.DataPath
 	if opts.DataPath == "" {
 		cwd, _ := os.Getwd()
@@ -79,7 +83,7 @@ func New(opts *Options) *NSQD {
 	if opts.Logger == nil {
 		opts.Logger = log.New(os.Stderr, opts.LogPrefix, log.Ldate|log.Ltime|log.Lmicroseconds)
 	}
-
+	// 创建NSQD对象，并初始化参数
 	n := &NSQD{
 		startTime:            time.Now(),
 		topicMap:             make(map[string]*Topic),
@@ -96,21 +100,22 @@ func New(opts *Options) *NSQD {
 		n.logf(LOG_FATAL, "log level '%s' should be one of: debug, info, warn, error, or fatal", opts.LogLevel)
 		os.Exit(1)
 	}
-
+	// 存储参数
 	n.swapOpts(opts)
 	n.errValue.Store(errStore{})
-
+	// 锁定数据目录（Exit函数中解锁）
 	err := n.dl.Lock()
+	// 失败就退出，说明其他实例在访问
 	if err != nil {
 		n.logf(LOG_FATAL, "--data-path=%s in use (possibly by another instance of nsqd)", dataPath)
 		os.Exit(1)
 	}
-
+	// 最大的压缩比率等级
 	if opts.MaxDeflateLevel < 1 || opts.MaxDeflateLevel > 9 {
 		n.logf(LOG_FATAL, "--max-deflate-level must be [1,9]")
 		os.Exit(1)
 	}
-
+	// work-id范围是[0,1024)
 	if opts.ID < 0 || opts.ID >= 1024 {
 		n.logf(LOG_FATAL, "--node-id must be [0,1024)")
 		os.Exit(1)
@@ -305,15 +310,15 @@ func writeSyncFile(fn string, data []byte) error {
 	f.Close()
 	return err
 }
-
+// 载入原数据
 func (n *NSQD) LoadMetadata() error {
-	atomic.StoreInt32(&n.isLoading, 1)
-	defer atomic.StoreInt32(&n.isLoading, 0)
-
+	atomic.StoreInt32(&n.isLoading, 1) // 表明数据在载入过程中
+	defer atomic.StoreInt32(&n.isLoading, 0)// 表明数据完成载入过程
+	// 获取数据的完整路径
 	fn := newMetadataFile(n.getOpts())
 	// old metadata filename with ID, maintained in parallel to enable roll-back
 	fnID := oldMetadataFile(n.getOpts())
-
+	// 一次性读取全部的数据
 	data, err := readOrEmpty(fn)
 	if err != nil {
 		return err
@@ -366,7 +371,7 @@ func (n *NSQD) LoadMetadata() error {
 	}
 	return nil
 }
-
+// 持久化元数据
 func (n *NSQD) PersistMetadata() error {
 	// persist metadata about what topics/channels we have, across restarts
 	fileName := newMetadataFile(n.getOpts())
@@ -451,7 +456,7 @@ func (n *NSQD) PersistMetadata() error {
 
 	return nil
 }
-
+// 实例退出处理
 func (n *NSQD) Exit() {
 	if n.tcpListener != nil {
 		n.tcpListener.Close()
@@ -481,7 +486,7 @@ func (n *NSQD) Exit() {
 
 	n.dl.Unlock()
 }
-
+// 获取指定的topic的实例，如果不存在就创建一个
 // GetTopic performs a thread safe operation
 // to return a pointer to a Topic object (potentially new)
 func (n *NSQD) GetTopic(topicName string) *Topic {
@@ -547,7 +552,7 @@ func (n *NSQD) GetTopic(topicName string) *Topic {
 	}
 	return t
 }
-
+// 通过名字获取Topic对象
 // GetExistingTopic gets a topic only if it exists
 func (n *NSQD) GetExistingTopic(topicName string) (*Topic, error) {
 	n.RLock()
@@ -558,7 +563,7 @@ func (n *NSQD) GetExistingTopic(topicName string) (*Topic, error) {
 	}
 	return topic, nil
 }
-
+// 通过名字删除Topic对象
 // DeleteExistingTopic removes a topic only if it exists
 func (n *NSQD) DeleteExistingTopic(topicName string) error {
 	n.RLock()

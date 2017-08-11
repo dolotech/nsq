@@ -18,18 +18,28 @@ type Topic struct {
 	messageCount uint64
 
 	sync.RWMutex
-
+	// topic的名字
 	name              string
+	// 一个Topic实例下有多个Channel
 	channelMap        map[string]*Channel
+	// 消息持久化队列
 	backend           BackendQueue
+	// 如果想要往该topic发布消息，只需要将消息写到Topic.memoryMsgChan中
+	// 创建Topic时会开启一个新的goroutine(messagePump)负责监听Topic.memoryMsgChan，
+	// 当有新消息时会将将消息复制N份发送到该Topic下的所有Channel中
 	memoryMsgChan     chan *Message
+	// 通知相关的goroutine退出
 	exitChan          chan int
+	// 通知channelMap的更新，在messagePump中处理
 	channelUpdateChan chan int
+	// 等待全部的goroutine退出
 	waitGroup         util.WaitGroupWrapper
+	// 标记是否退出
 	exitFlag          int32
 	idFactory         *guidFactory
-
+	// 临时(代码的意思是如果设置为ephemeral的topic在不存在channel的情况下面要销毁 )
 	ephemeral      bool
+	// 删除topic的回调
 	deleteCallback func(*Topic)
 	deleter        sync.Once
 
@@ -40,6 +50,7 @@ type Topic struct {
 }
 
 // Topic constructor
+// 创建Topic对象（主题名字、上下文对象(NSQD)、删除主题回调对象）
 func NewTopic(topicName string, ctx *context, deleteCallback func(*Topic)) *Topic {
 	t := &Topic{
 		name:              topicName,
@@ -351,18 +362,18 @@ func (t *Topic) exit(deleted bool) error {
 	t.flush()
 	return t.backend.Close()
 }
-
+// 清理内存和磁盘中的数据
 func (t *Topic) Empty() error {
 	for {
 		select {
-		case <-t.memoryMsgChan:
+		case <-t.memoryMsgChan: // 清空通道里面的数据
 		default:
 			goto finish
 		}
 	}
 
 finish:
-	return t.backend.Empty()
+	return t.backend.Empty()// 清理BackendQueue上面的数据
 }
 
 func (t *Topic) flush() error {
@@ -412,15 +423,17 @@ func (t *Topic) AggregateChannelE2eProcessingLatency() *quantile.Quantile {
 	}
 	return latencyStream
 }
-
+// 暂停操作
 func (t *Topic) Pause() error {
 	return t.doPause(true)
 }
 
+// 重启操作
 func (t *Topic) UnPause() error {
 	return t.doPause(false)
 }
 
+// 请求暂停/重启操作
 func (t *Topic) doPause(pause bool) error {
 	if pause {
 		atomic.StoreInt32(&t.paused, 1)
@@ -429,13 +442,13 @@ func (t *Topic) doPause(pause bool) error {
 	}
 
 	select {
-	case t.pauseChan <- pause:
+	case t.pauseChan <- pause: // 请求暂停/重启操作，messagePump中处理
 	case <-t.exitChan:
 	}
 
 	return nil
 }
-
+// 判断是否为暂停状态
 func (t *Topic) IsPaused() bool {
 	return atomic.LoadInt32(&t.paused) == 1
 }

@@ -1,5 +1,6 @@
 package nsqd
 
+//优先级队列
 type inFlightPqueue []*Message
 
 func newInFlightPqueue(capacity int) inFlightPqueue {
@@ -16,6 +17,7 @@ func (pq *inFlightPqueue) Push(x *Message) {
 	n := len(*pq)
 	c := cap(*pq)
 	if n+1 > c {
+		// 以两倍的方式扩容
 		npq := make(inFlightPqueue, n, c*2)
 		copy(npq, *pq)
 		*pq = npq
@@ -32,6 +34,7 @@ func (pq *inFlightPqueue) Pop() *Message {
 	pq.Swap(0, n-1)
 	pq.down(0, n-1)
 	if n < (c/2) && c > 25 {
+		// 如果总容量大于25，空闲容量不足一半，则缩容到1/2
 		npq := make(inFlightPqueue, n, c/2)
 		copy(npq, *pq)
 		*pq = npq

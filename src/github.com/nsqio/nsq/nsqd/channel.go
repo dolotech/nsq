@@ -15,6 +15,7 @@ import (
 	"github.com/nsqio/nsq/internal/quantile"
 )
 
+// 定义消费者行为
 type Consumer interface {
 	UnPause()
 	Pause()
@@ -40,14 +41,14 @@ type Channel struct {
 
 	sync.RWMutex
 
-	topicName string
-	name      string
-	ctx       *context
-
-	backend BackendQueue
-
+	topicName string   // 所属topic的名字
+	name      string   // channel的名字
+	ctx       *context // 上下文对象（NSQD）
+	// 数据持久化
+	backend BackendQueue // channel自己的数据队列
+	// memoryMsgChan负责接收写到该Channel的所有消息
 	memoryMsgChan chan *Message
-	exitFlag      int32
+	exitFlag      int32 // 标记是否正在退出
 	exitMutex     sync.RWMutex
 
 	// state tracking
@@ -62,10 +63,10 @@ type Channel struct {
 
 	// TODO: these can be DRYd up
 	deferredMessages map[MessageID]*pqueue.Item
-	deferredPQ       pqueue.PriorityQueue
+	deferredPQ       pqueue.PriorityQueue // 投递失败，等待重新投递的消息
 	deferredMutex    sync.Mutex
-	inFlightMessages map[MessageID]*Message
-	inFlightPQ       inFlightPqueue
+	inFlightMessages map[MessageID]*Message // 管理发送出去但是对端没有确认收到的消息
+	inFlightPQ       inFlightPqueue         // 正在投递但还没确认投递成功的消息
 	inFlightMutex    sync.Mutex
 }
 
