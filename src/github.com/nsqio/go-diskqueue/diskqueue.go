@@ -29,6 +29,7 @@ type Interface interface {
 }
 
 // diskQueue implements a filesystem backed FIFO queue
+// 先进先出的文件系统
 type diskQueue struct {
 	// 64bit atomic vars need to be first for proper alignment on 32bit platforms
 

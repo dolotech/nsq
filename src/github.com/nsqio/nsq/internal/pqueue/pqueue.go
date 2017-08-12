@@ -10,8 +10,10 @@ type Item struct {
 	Index    int
 }
 
+// 优先级链表
 // this is a priority queue as implemented by a min heap
 // ie. the 0th element is the *lowest* value
+//
 type PriorityQueue []*Item
 
 func New(capacity int) PriorityQueue {
