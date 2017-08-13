@@ -165,7 +165,7 @@ func (p *protocolV2) Send(client *clientV2, frameType int32, data []byte) error 
 		client.writeLock.Unlock()
 		return err
 	}
-	// 如果不是Mesaage就刷新一边。保证数据全部发送出去
+	// 如果不是Mesaage就刷新一遍。保证数据全部发送出去
 	if frameType != frameTypeMessage {
 		err = client.Flush()
 	}
@@ -374,6 +374,7 @@ exit:
 		p.ctx.nsqd.logf(LOG_ERROR, "PROTOCOL(V2): [%s] messagePump error - %s", client, err)
 	}
 }
+
 // 识别客户端
 func (p *protocolV2) IDENTIFY(client *clientV2, params [][]byte) ([]byte, error) {
 	var err error
@@ -516,6 +517,7 @@ func (p *protocolV2) IDENTIFY(client *clientV2, params [][]byte) ([]byte, error)
 
 	return nil, nil
 }
+
 // 进行认证过程
 func (p *protocolV2) AUTH(client *clientV2, params [][]byte) ([]byte, error) {
 	if atomic.LoadInt32(&client.State) != stateInit {
@@ -608,6 +610,7 @@ func (p *protocolV2) CheckAuth(client *clientV2, cmd, topicName, channelName str
 	}
 	return nil
 }
+
 // 向指定topic下的指定channel添加自己作为消费者
 func (p *protocolV2) SUB(client *clientV2, params [][]byte) ([]byte, error) {
 	if atomic.LoadInt32(&client.State) != stateInit {
@@ -698,6 +701,7 @@ func (p *protocolV2) RDY(client *clientV2, params [][]byte) ([]byte, error) {
 
 	return nil, nil
 }
+
 // 通知服务器消息处理完成
 func (p *protocolV2) FIN(client *clientV2, params [][]byte) ([]byte, error) {
 	state := atomic.LoadInt32(&client.State)
@@ -772,6 +776,7 @@ func (p *protocolV2) REQ(client *clientV2, params [][]byte) ([]byte, error) {
 
 	return nil, nil
 }
+
 // 将消费者关闭
 func (p *protocolV2) CLS(client *clientV2, params [][]byte) ([]byte, error) {
 	if atomic.LoadInt32(&client.State) != stateSubscribed {
@@ -786,6 +791,7 @@ func (p *protocolV2) CLS(client *clientV2, params [][]byte) ([]byte, error) {
 func (p *protocolV2) NOP(client *clientV2, params [][]byte) ([]byte, error) {
 	return nil, nil
 }
+
 // 进行消息投递
 func (p *protocolV2) PUB(client *clientV2, params [][]byte) ([]byte, error) {
 	var err error
@@ -834,6 +840,7 @@ func (p *protocolV2) PUB(client *clientV2, params [][]byte) ([]byte, error) {
 
 	return okBytes, nil
 }
+
 // 客户端一次向topic发布多个消息
 func (p *protocolV2) MPUB(client *clientV2, params [][]byte) ([]byte, error) {
 	var err error
@@ -885,6 +892,7 @@ func (p *protocolV2) MPUB(client *clientV2, params [][]byte) ([]byte, error) {
 
 	return okBytes, nil
 }
+
 // 发布带重新发布时间间隔的消息
 func (p *protocolV2) DPUB(client *clientV2, params [][]byte) ([]byte, error) {
 	var err error
@@ -947,6 +955,7 @@ func (p *protocolV2) DPUB(client *clientV2, params [][]byte) ([]byte, error) {
 
 	return okBytes, nil
 }
+
 // 将消息的超时时间重置
 func (p *protocolV2) TOUCH(client *clientV2, params [][]byte) ([]byte, error) {
 	state := atomic.LoadInt32(&client.State)
@@ -974,6 +983,7 @@ func (p *protocolV2) TOUCH(client *clientV2, params [][]byte) ([]byte, error) {
 
 	return nil, nil
 }
+
 // 从reader取得消息列表
 func readMPUB(r io.Reader, tmp []byte, topic *Topic, maxMessageSize int64, maxBodySize int64) ([]*Message, error) {
 	numMessages, err := readLen(r, tmp)
@@ -1025,6 +1035,7 @@ func getMessageID(p []byte) (*MessageID, error) {
 	}
 	return (*MessageID)(unsafe.Pointer(&p[0])), nil
 }
+
 // 从socket里面得到消息体的长度
 func readLen(r io.Reader, tmp []byte) (int32, error) {
 	_, err := io.ReadFull(r, tmp)

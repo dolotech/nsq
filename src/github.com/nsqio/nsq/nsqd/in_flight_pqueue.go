@@ -1,6 +1,12 @@
 package nsqd
 
-//优先级队列
+// 基于小堆实现的的优先队列
+// 父节点一点不会比子节点大
+// 不保证左右子节点的大小顺序
+// 如果总容量大于25，空闲容量超过一半，则缩容到1/2
+// 如果容量不足以两倍的方式扩容
+// 缩容扩容都会新建并拷贝整个列表
+
 type inFlightPqueue []*Message
 
 func newInFlightPqueue(capacity int) inFlightPqueue {
@@ -31,10 +37,10 @@ func (pq *inFlightPqueue) Push(x *Message) {
 func (pq *inFlightPqueue) Pop() *Message {
 	n := len(*pq)
 	c := cap(*pq)
-	pq.Swap(0, n-1)
-	pq.down(0, n-1)
+	pq.Swap(0, n-1) // 把最底部的消息跟将要弹出堆的顶部的交换
+	pq.down(0, n-1) // 最底部的元素为最小值，马上要弹出，不参与下沉
 	if n < (c/2) && c > 25 {
-		// 如果总容量大于25，空闲容量不足一半，则缩容到1/2
+		// 如果总容量大于25，空闲容量超过一半，则缩容到1/2
 		npq := make(inFlightPqueue, n, c/2)
 		copy(npq, *pq)
 		*pq = npq
@@ -58,6 +64,7 @@ func (pq *inFlightPqueue) Remove(i int) *Message {
 	return x
 }
 
+// 最小元素的优先级大于max才返回Item
 func (pq *inFlightPqueue) PeekAndShift(max int64) (*Message, int64) {
 	if len(*pq) == 0 {
 		return nil, 0
@@ -72,10 +79,11 @@ func (pq *inFlightPqueue) PeekAndShift(max int64) (*Message, int64) {
 	return x, 0
 }
 
+// 上浮
 func (pq *inFlightPqueue) up(j int) {
 	for {
-		i := (j - 1) / 2 // parent
-		if i == j || (*pq)[j].pri >= (*pq)[i].pri {
+		i := (j - 1) / 2                            // 计算2叉堆的父节点元素下标
+		if i == j || (*pq)[j].pri >= (*pq)[i].pri { // 小堆实现
 			break
 		}
 		pq.Swap(i, j)
@@ -83,16 +91,19 @@ func (pq *inFlightPqueue) up(j int) {
 	}
 }
 
+// 下沉
 func (pq *inFlightPqueue) down(i, n int) {
 	for {
-		j1 := 2*i + 1
+		j1 := 2*i + 1          //计算二叉堆左叶子节点的下标
 		if j1 >= n || j1 < 0 { // j1 < 0 after int overflow
 			break
 		}
 		j := j1 // left child
+		// 跟子节点的小值对比
 		if j2 := j1 + 1; j2 < n && (*pq)[j1].pri >= (*pq)[j2].pri {
 			j = j2 // = 2*i + 2  // right child
 		}
+		// 直到子节点不小于父节点
 		if (*pq)[j].pri >= (*pq)[i].pri {
 			break
 		}

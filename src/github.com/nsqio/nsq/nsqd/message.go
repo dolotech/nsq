@@ -15,6 +15,7 @@ const (
 
 type MessageID [MsgIDLength]byte
 
+// nsq消息数据结构
 type Message struct {
 	ID        MessageID // 16字节的MessageID
 	Body      []byte    // 消息内容
@@ -24,9 +25,9 @@ type Message struct {
 	// for in-flight handling
 	deliveryTS time.Time
 	clientID   int64
-	pri        int64		// 消息优先级
-	index      int			// 消息在优先级队列的下标
-	deferred   time.Duration	// 消息延迟
+	pri        int64         // 消息优先级
+	index      int           // 消息在优先级队列的下标
+	deferred   time.Duration // 消息延迟
 }
 
 func NewMessage(id MessageID, body []byte) *Message {
