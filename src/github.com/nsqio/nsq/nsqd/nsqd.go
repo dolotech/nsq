@@ -29,7 +29,7 @@ import (
 )
 
 const (
-	TLSNotRequired = iota
+	TLSNotRequired        = iota
 	TLSRequiredExceptHTTP
 	TLSRequired
 )
@@ -48,9 +48,9 @@ type NSQD struct {
 	opts atomic.Value
 
 	dl        *dirlock.DirLock // 文件锁
-	isLoading int32  // 1:表明数据在载入过程中
-	errValue  atomic.Value// 表示健康状况的错误值
-	startTime time.Time // 启动时间
+	isLoading int32            // 1:表明数据在载入过程中
+	errValue  atomic.Value     // 表示健康状况的错误值
+	startTime time.Time        // 启动时间
 	// 一个nsqd实例可以有多个Topic,使用sync.RWMutex加锁
 	topicMap map[string]*Topic
 
@@ -66,9 +66,9 @@ type NSQD struct {
 	notifyChan           chan interface{}
 	optsNotificationChan chan struct{}
 	// 通知整体退出
-	exitChan             chan int
+	exitChan chan int
 	// 等待goroutine退出
-	waitGroup            util.WaitGroupWrapper
+	waitGroup util.WaitGroupWrapper
 
 	ci *clusterinfo.ClusterInfo
 }
@@ -270,8 +270,8 @@ func (n *NSQD) Main() {
 
 type meta struct {
 	Topics []struct {
-		Name     string `json:"name"`
-		Paused   bool   `json:"paused"`
+		Name   string `json:"name"`
+		Paused bool   `json:"paused"`
 		Channels []struct {
 			Name   string `json:"name"`
 			Paused bool   `json:"paused"`
@@ -310,10 +310,11 @@ func writeSyncFile(fn string, data []byte) error {
 	f.Close()
 	return err
 }
+
 // 载入原数据
 func (n *NSQD) LoadMetadata() error {
-	atomic.StoreInt32(&n.isLoading, 1) // 表明数据在载入过程中
-	defer atomic.StoreInt32(&n.isLoading, 0)// 表明数据完成载入过程
+	atomic.StoreInt32(&n.isLoading, 1)       // 表明数据在载入过程中
+	defer atomic.StoreInt32(&n.isLoading, 0) // 表明数据完成载入过程
 	// 获取数据的完整路径
 	fn := newMetadataFile(n.getOpts())
 	// old metadata filename with ID, maintained in parallel to enable roll-back
@@ -371,6 +372,7 @@ func (n *NSQD) LoadMetadata() error {
 	}
 	return nil
 }
+
 // 持久化元数据
 func (n *NSQD) PersistMetadata() error {
 	// persist metadata about what topics/channels we have, across restarts
@@ -456,6 +458,7 @@ func (n *NSQD) PersistMetadata() error {
 
 	return nil
 }
+
 // 实例退出处理
 func (n *NSQD) Exit() {
 	if n.tcpListener != nil {
@@ -486,6 +489,7 @@ func (n *NSQD) Exit() {
 
 	n.dl.Unlock()
 }
+
 // 获取指定的topic的实例，如果不存在就创建一个
 // GetTopic performs a thread safe operation
 // to return a pointer to a Topic object (potentially new)
@@ -552,6 +556,7 @@ func (n *NSQD) GetTopic(topicName string) *Topic {
 	}
 	return t
 }
+
 // 通过名字获取Topic对象
 // GetExistingTopic gets a topic only if it exists
 func (n *NSQD) GetExistingTopic(topicName string) (*Topic, error) {
@@ -563,6 +568,7 @@ func (n *NSQD) GetExistingTopic(topicName string) (*Topic, error) {
 	}
 	return topic, nil
 }
+
 // 通过名字删除Topic对象
 // DeleteExistingTopic removes a topic only if it exists
 func (n *NSQD) DeleteExistingTopic(topicName string) error {

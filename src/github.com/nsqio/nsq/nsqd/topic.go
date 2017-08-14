@@ -13,32 +13,39 @@ import (
 	"github.com/nsqio/nsq/internal/util"
 )
 
+//put函数使用了一个带缓冲的go channel的特性：如果case里的go channel阻塞了，那么就会跳过该case语句，执行default分支。
+// 即，如果当前memoryMsgChan还有足够缓冲空间，
+//则消息被投入memoryMsgChan，如果当前memoryMsgChan的缓冲区已满，则将执行default分支，从而将消息保存到backend中。
+//对于临时topic，由于backend不进行任何操作，这就意味着消息在内存的缓存满了之后会被直接丢弃，
+// 对于永久的channel，则backend会将该消息持久化到磁盘的文件中。
+//put函数使用了Golang的channel特性，大大简化了实现这个逻辑的代码量，
+// 以下通过一个简单的示例看看Golang的带缓冲的channel的这一特性，
 type Topic struct {
 	// 64bit atomic vars need to be first for proper alignment on 32bit platforms
 	messageCount uint64
 
 	sync.RWMutex
 	// topic的名字
-	name              string
+	name string
 	// 一个Topic实例下有多个Channel
-	channelMap        map[string]*Channel
+	channelMap map[string]*Channel
 	// 消息持久化队列
-	backend           BackendQueue
+	backend BackendQueue
 	// 如果想要往该topic发布消息，只需要将消息写到Topic.memoryMsgChan中
 	// 创建Topic时会开启一个新的goroutine(messagePump)负责监听Topic.memoryMsgChan，
 	// 当有新消息时会将将消息复制N份发送到该Topic下的所有Channel中
-	memoryMsgChan     chan *Message
+	memoryMsgChan chan *Message
 	// 通知相关的goroutine退出
-	exitChan          chan int
+	exitChan chan int
 	// 通知channelMap的更新，在messagePump中处理
 	channelUpdateChan chan int
 	// 等待全部的goroutine退出
-	waitGroup         util.WaitGroupWrapper
+	waitGroup util.WaitGroupWrapper
 	// 标记是否退出
-	exitFlag          int32
-	idFactory         *guidFactory
+	exitFlag  int32
+	idFactory *guidFactory
 	// 临时(代码的意思是如果设置为ephemeral的topic在不存在channel的情况下面要销毁 )
-	ephemeral      bool
+	ephemeral bool
 	// 删除topic的回调
 	deleteCallback func(*Topic)
 	deleter        sync.Once
@@ -197,6 +204,7 @@ func (t *Topic) PutMessages(msgs []*Message) error {
 	atomic.AddUint64(&t.messageCount, uint64(len(msgs)))
 	return nil
 }
+
 // 将消息写到topic的channel中，如果topic的memoryMsgChan已满则将topic写到磁盘文件中
 func (t *Topic) put(m *Message) error {
 	select {
@@ -215,6 +223,7 @@ func (t *Topic) put(m *Message) error {
 	}
 	return nil
 }
+
 // 深度： 内存中的消息个数 + （BackendQueue）队列中的数据
 func (t *Topic) Depth() int64 {
 	return int64(len(t.memoryMsgChan)) + t.backend.Depth()
@@ -363,6 +372,7 @@ func (t *Topic) exit(deleted bool) error {
 	t.flush()
 	return t.backend.Close()
 }
+
 // 清理内存和磁盘中的数据
 func (t *Topic) Empty() error {
 	for {
@@ -374,7 +384,7 @@ func (t *Topic) Empty() error {
 	}
 
 finish:
-	return t.backend.Empty()// 清理BackendQueue上面的数据
+	return t.backend.Empty() // 清理BackendQueue上面的数据
 }
 
 func (t *Topic) flush() error {
@@ -424,6 +434,7 @@ func (t *Topic) AggregateChannelE2eProcessingLatency() *quantile.Quantile {
 	}
 	return latencyStream
 }
+
 // 暂停操作
 func (t *Topic) Pause() error {
 	return t.doPause(true)
@@ -449,6 +460,7 @@ func (t *Topic) doPause(pause bool) error {
 
 	return nil
 }
+
 // 判断是否为暂停状态
 func (t *Topic) IsPaused() bool {
 	return atomic.LoadInt32(&t.paused) == 1

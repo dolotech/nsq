@@ -14,8 +14,14 @@ import (
 	"github.com/nsqio/nsq/internal/pqueue"
 	"github.com/nsqio/nsq/internal/quantile"
 )
+//Channel是消费者订阅特定Topic的一种抽象。对于发往Topic的消息，
+// nsqd向该Topic下的所有Channel投递消息，而同一个Channel只投递一次，
+// Channel下如果存在多个消费者，则随机选择一个消费者做投递。这种投递方式可以被用作消费者负载均衡。
+//Channel从属于特定Topic，可以认为是Topic的下一级。在同一个Topic之下可以有零个或多个Channel。
+//和Topic一样，Channel同样有永久和临时之分，永久的Channel只能通过显式删除销毁，
+// 临时的Channel在最后一个消费者断开连接的时候被销毁。
+//与服务于生产者的Topic不同，Channel直接面向消费者。
 
-// 定义消费者行为
 type Consumer interface {
 	UnPause()
 	Pause()

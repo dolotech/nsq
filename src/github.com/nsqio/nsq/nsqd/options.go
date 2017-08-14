@@ -12,11 +12,11 @@ import (
 
 type Options struct {
 	// basic options
-	ID                       int64  `flag:"node-id" cfg:"id"` //进程的唯一码(默认是主机名的哈希值)
+	ID                       int64  `flag:"node-id" cfg:"id"` //进程的唯一码(默认是主机名的哈希值%1024)
 	LogLevel                 string `flag:"log-level"`
 	logLevel                 int
 	LogPrefix                string        `flag:"log-prefix"`
-	Verbose                  bool          `flag:"verbose"` // for backwards compatibility 打开日志
+	Verbose                  bool          `flag:"verbose"` // for backwards compatibility 详细的日志输出
 	TCPAddress               string        `flag:"tcp-address"`
 	HTTPAddress              string        `flag:"http-address"`                                       //为 HTTP 客户端监听 <addr>:<port>
 	HTTPSAddress             string        `flag:"https-address"`                                      //为 HTTPS 客户端 监听 <addr>:<port>
@@ -27,17 +27,17 @@ type Options struct {
 	HTTPClientRequestTimeout time.Duration `flag:"http-client-request-timeout" cfg:"http_client_request_timeout"`
 
 	// diskqueue options
-	DataPath        string        `flag:"data-path"` //缓存消息的磁盘路径
-	MemQueueSize    int64         `flag:"mem-queue-size"`
+	DataPath        string        `flag:"data-path"`          // 持久化数据的路径
+	MemQueueSize    int64         `flag:"mem-queue-size"`     // 优先消息队列的缓冲大小
 	MaxBytesPerFile int64         `flag:"max-bytes-per-file"` //每个磁盘队列文件的字节数
-	SyncEvery       int64         `flag:"sync-every"`
-	SyncTimeout     time.Duration `flag:"sync-timeout"`
+	SyncEvery       int64         `flag:"sync-every"`         // 磁盘队列 fsync 的消息数
+	SyncTimeout     time.Duration `flag:"sync-timeout"`       // 每个磁盘队列 fsync 平均耗时
 
-	QueueScanInterval        time.Duration
-	QueueScanRefreshInterval time.Duration
-	QueueScanSelectionCount  int
-	QueueScanWorkerPoolMax   int
-	QueueScanDirtyPercent    float64
+	QueueScanInterval        time.Duration // workTicker定时器时间（）
+	QueueScanRefreshInterval time.Duration // refreshTicker定时器时间（更新Channel列表，并重新分配worker）
+	QueueScanSelectionCount  int           // 每次扫描最多选择的Channel数量
+	QueueScanWorkerPoolMax   int           // queueScanWorker的goroutines的最大数量
+	QueueScanDirtyPercent    float64       // 消息投递的比例
 
 	// msg and command options
 	MsgTimeout    time.Duration `flag:"msg-timeout"`     //自动重新队列消息前需要等待的时间
@@ -48,10 +48,10 @@ type Options struct {
 	ClientTimeout time.Duration
 
 	// client overridable configuration options
-	MaxHeartbeatInterval   time.Duration `flag:"max-heartbeat-interval"`    // 在客户端心跳间，最大的客户端配置时间间隔
-	MaxRdyCount            int64         `flag:"max-rdy-count"`             //客户端最大的 RDY 数量
-	MaxOutputBufferSize    int64         `flag:"max-output-buffer-size"`    //最大客户端输出缓存可配置大小(字节）
-	MaxOutputBufferTimeout time.Duration `flag:"max-output-buffer-timeout"` // 最大客户端输出缓存可配置大小(字节）
+	MaxHeartbeatInterval   time.Duration `flag:"max-heartbeat-interval"`    // 心跳超时
+	MaxRdyCount            int64         `flag:"max-rdy-count"`             // 允许客户端一次最多接收的消息数量
+	MaxOutputBufferSize    int64         `flag:"max-output-buffer-size"`    // tcp writer对象的缓存
+	MaxOutputBufferTimeout time.Duration `flag:"max-output-buffer-timeout"` //  在 flushing 到客户端前，最长的配置时间间隔。
 
 	// statsd integration
 	StatsdAddress  string        `flag:"statsd-address"`   //统计进程的 UDP <addr>:<port

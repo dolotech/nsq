@@ -1,6 +1,6 @@
 package nsqd
 
-// 基于小堆实现的的优先队列
+// 基于小堆实现的的优先消息队列
 // 父节点一点不会比子节点大
 // 不保证左右子节点的大小顺序
 // 如果总容量大于25，空闲容量超过一半，则缩容到1/2
@@ -9,6 +9,7 @@ package nsqd
 
 type inFlightPqueue []*Message
 
+// 创建容量为capacity的切片
 func newInFlightPqueue(capacity int) inFlightPqueue {
 	return make(inFlightPqueue, 0, capacity)
 }
